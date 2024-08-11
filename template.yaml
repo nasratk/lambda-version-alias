@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: MyLambdaFunction
+
+  CreateNewVersion:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+      
+  ProdAliasVersion:
+    Type: String
+    Default: '$LATEST'
+
+Conditions:
+  ShouldCreateNewVersion: !Equals
+    - !Ref CreateNewVersion
+    - 'true'
+
+Resources:
+  MyLambdaFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: !Ref FunctionName
+      Handler: index.handler
+      Runtime: nodejs14.x
+      CodeUri: src/
+      MemorySize: 128
+      Timeout: 10
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+  LambdaVersion:
+    Type: AWS::Lambda::Version
+    Condition: ShouldCreateNewVersion
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+
+  ProdAlias:
+    Type: AWS::Lambda::Alias
+    DependsOn: LambdaVersion
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      FunctionVersion: !If 
+        - ShouldCreateNewVersion
+        - !GetAtt LambdaVersion.Version
+        - !Ref ProdAliasVersion
+      Name: prod
+
+  DevAlias:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      FunctionVersion: '$LATEST'
+      Name: dev
